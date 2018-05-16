@@ -8,36 +8,38 @@ camera = cv2.VideoCapture(0)
 fwidth = int(sys.argv[1])
 print("frame width =", fwidth)
 
-def filterLedOn(hsv):
+def filterLed(hsv):
     lowerLed = np.array([0,0,245])
     upperLed = np.array([180,180,255])
     return cv2.inRange(hsv, lowerLed, upperLed)
 
-def filterBlack(hsv):
+def filterBlack1(hsv):
     lowerBlack1 = np.array([0, 0, 0])
     upperBlack1 = np.array([180, 255, 90])
     mask1 = cv2.inRange(hsv, lowerBlack1, upperBlack1)
     return mask1
-    #lowerBlack2 = np.array([0, 0, 30])
-    #upperBlack2 = np.array([180, 230, 160])
-    #mask2 = cv2.inRange(hsv, lowerBlack2, upperBlack2)
-    #return mask1 | mask2
+    
+def filterBlack2(hsv):
+    lowerBlack2 = np.array([0, 0, 0])
+    upperBlack2 = np.array([180, 230, 140])
+    mask2 = cv2.inRange(hsv, lowerBlack2, upperBlack2)
+    return mask2
 
 def filterRed1(hsv):
-    lowerRed1 = np.array([0,80,190])
+    lowerRed1 = np.array([0,80,200])
     upperRed1 = np.array([10,255,255])
     mask1 = cv2.inRange(hsv, lowerRed1, upperRed1)
-    lowerRed2 = np.array([170,80,190])
+    lowerRed2 = np.array([170,80,200])
     upperRed2 = np.array([180,255,255])
     mask2 = cv2.inRange(hsv, lowerRed2, upperRed2)
     return mask1 | mask2;
     
 def filterRed2(hsv):
     lowerRed1 = np.array([0,80,150])
-    upperRed1 = np.array([10,255,180])
+    upperRed1 = np.array([10,255,200])
     mask1 = cv2.inRange(hsv, lowerRed1, upperRed1)
     lowerRed2 = np.array([170,80,150])
-    upperRed2 = np.array([180,255,180])
+    upperRed2 = np.array([180,255,200])
     mask2 = cv2.inRange(hsv, lowerRed2, upperRed2)
     return mask1 | mask2;
     
@@ -62,7 +64,7 @@ def filterGreen(hsv):
 
 def findAndDrawCirclesOnMask(imgOriginal, mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
 	circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1, minDist=1, #minDist=int(fwidth*0.028),
-                            param1=10, param2=11, minRadius=0, maxRadius=int(fwidth*0.04))
+                            param1=10, param2=10, minRadius=0, maxRadius=int(fwidth*0.04))
 	if (circles is not None):
 		circles = np.uint16(np.around(circles))
 		for j in circles[0,:]:
@@ -139,7 +141,7 @@ def detectRect(c):
 	return None
 
 maxGlowingPeriod = 7
-minGlowingDetectPeriod = 1
+minGlowingDetectPeriod = 2
 
 def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod):
 	text = colorName
@@ -149,11 +151,17 @@ def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPe
 		text += " now"
 		if (inside):
 			text += " in box"
+			glowingPeriod += 2
+		else:
 			glowingPeriod += 1
+		if (glowingPeriod > maxGlowingPeriod):
+			glowingPeriod = maxGlowingPeriod
 				
-	if (glowingPeriod == glowingPeriodOld or glowingPeriod > maxGlowingPeriod):
-		if (glowingPeriod > 0):
-			glowingPeriod -= 1
+	if (not signal):
+		glowingPeriod -= 1
+		if (glowingPeriod < 0):
+			glowingPeriod = 0
+				
 	if (glowingPeriod >= minGlowingDetectPeriod):
 		text += ", detected state"
 	frame = cv2.putText(frame, text, (15, y), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0,200,255), 
@@ -163,29 +171,31 @@ def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPe
 
 sizeG = 7 	# size of Gauss filter kernel
 frame = None
-cv2.namedWindow("Mask")
-cv2.namedWindow("Maskro1")
-cv2.namedWindow("Maskro2")
+cv2.namedWindow("Maskb1")
+cv2.namedWindow("Maskb2")
+#cv2.namedWindow("Maskro1")
+#cv2.namedWindow("Maskro2")
+#cv2.namedWindow("Maskro3")
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", mouseCoords)
-glowingpr1, glowingpr2, glowingpy, glowingpg = 0, 0, 0, 0
+glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg = 0, 0, 0, 0, 0
 
 while True:
 	(grabbed, frame) = camera.read()
 	frame = imutils.resize(frame, fwidth) # numpy.ndarray
 	blur = cv2.GaussianBlur(frame, (sizeG, sizeG), 0)
+	
+	maskLed, circlesLed = findCircles(blur, filterLed, (155, 0, 0))
 
-	hsvLedOn = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-	maskLedOn = filterLedOn(hsvLedOn)
-	maskLedOn = cv2.dilate(maskLedOn, None, iterations=2)
-	maskLedOn = cv2.erode(maskLedOn, None, iterations=1)
-	circlesLed = findAndDrawCirclesOnMask(frame, maskLedOn, (155, 0, 0))
+	hsvBlack1 = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+	maskBlack1 = filterBlack1(hsvBlack1)
+	maskBlack1 = cv2.dilate(maskBlack1, None, iterations=2)
+	maskBlack1 = cv2.erode(maskBlack1, None, iterations=1)
 
-	hsvBlack = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-	maskBlack = filterBlack(hsvBlack)
-	maskBlack = cv2.dilate(maskBlack, None, iterations=2)
-	maskBlack = cv2.erode(maskBlack, None, iterations=1)
-	circlesBlack = findAndDrawCirclesOnMask(frame, maskBlack, (155, 0, 0))
+	hsvBlack2 = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+	maskBlack2 = filterBlack2(hsvBlack2)
+	maskBlack2 = cv2.dilate(maskBlack2, None, iterations=2)
+	maskBlack2 = cv2.erode(maskBlack2, None, iterations=1)
 	
 	maskRed1, circlesRed1 = findCircles(blur, filterRed1, (0, 0, 200))
 	maskRed2, circlesRed2 = findCircles(blur, filterRed2, (0, 0, 150))
@@ -194,9 +204,11 @@ while True:
 	maskGreen, circlesGreen = findCircles(blur, filterGreen, (0, 200, 0))
 
 	lowThreshold = 25
-	maskCanny = cv2.Canny(blur, lowThreshold, lowThreshold*3, apertureSize=3)
-	cnts = cv2.findContours(maskBlack, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	cnts = cv2.findContours(maskBlack1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	cnts = cnts[0] if imutils.is_cv2() else cnts[1]
+	cnts2 = cv2.findContours(maskBlack2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	cnts2 = cnts2[0] if imutils.is_cv2() else cnts2[1]
+	cnts += cnts2
 
 	rects = []	
 	for c in cnts:
@@ -211,24 +223,25 @@ while True:
 	 	
 	hboxr1, glowingpr1 = detectSignal(circlesLed, circlesRed1, rects, frame, "Red1", 30, glowingpr1)
 	hboxr2, glowingpr2 = detectSignal(circlesLed, circlesRed2, rects, frame, "Red2", 50, glowingpr2)
-	hboxr3, glowingpr3 = detectSignal(circlesLed, circlesRed3, rects, frame, "Red3", 70, glowingpr2)
+	hboxr3, glowingpr3 = detectSignal(circlesLed, circlesRed3, rects, frame, "Red3", 70, glowingpr3)
 	hboxy, glowingpy = detectSignal(circlesLed, circlesYellow, rects, frame, "Yellow", 90, glowingpy)
 	hboxg, glowingpg = detectSignal(circlesLed, circlesGreen, rects, frame, "Green", 110, glowingpg)
-	print("glowing periods: ", glowingpr1, glowingpr2, glowingpy, glowingpg)
+	print("glowing periods: ", glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg)
 			
 	if (hboxg is not None): hbox = hboxg
 	elif (hboxy is not None): hbox = hboxy
 	elif (hboxr1 is not None): hbox = hboxr1
-	else: hbox = hboxr2
+	elif (hboxr2 is not None): hbox = hboxr2
+	else: hbox = hboxr3
 	frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 130), cv2.FONT_HERSHEY_SIMPLEX, 
 		fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
 	
 	#cv2.imshow("Mask", maskLedOn)
-	#cv2.imshow("Mask", maskBlack)
-	#cv2.imshow("Mask", maskCanny)
-	cv2.imshow("Maskro1", maskRed1)
-	cv2.imshow("Maskro2", maskRed2)
-	cv2.imshow("Maskro3", maskRed3)
+	cv2.imshow("Maskb1", maskBlack1)
+	cv2.imshow("Maskb2", maskBlack2)
+	#cv2.imshow("Maskro1", maskRed1)
+	#cv2.imshow("Maskro2", maskRed2)
+	#cv2.imshow("Maskro3", maskRed3)
 	#cv2.imshow("Mask", maskYellowOn)
 	#cv2.imshow("Mask green on", maskGreenOn)
 	cv2.imshow("Frame", frame)
