@@ -2,7 +2,11 @@ from collections import deque
 import numpy as np
 import imutils
 import cv2
-import math
+import math, sys
+
+camera = cv2.VideoCapture(0)
+fwidth = int(sys.argv[1])
+print("frame width =", fwidth)
 
 def filterLedOn(hsv):
     lowerLed = np.array([0,0,245])
@@ -39,8 +43,8 @@ def filterGreenOn(hsv):
     return cv2.inRange(hsv, lowerGreen, upperGreen)
 
 def findAndDrawCircles(imgOriginal, mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
-	circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1, minDist=17,
-                            param1=10, param2=11, minRadius=0, maxRadius=24)
+	circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1, minDist=int(fwidth*0.028),
+                            param1=10, param2=11, minRadius=0, maxRadius=int(fwidth*0.04))
 	if (circles is not None):
 		circles = np.uint16(np.around(circles))
 		for j in circles[0,:]:
@@ -66,7 +70,6 @@ def findSignal(circlesLed, circlesColor, rects, img):
 			for j in circlesColor[0,:]:
 				rl = i[2]
 				rr = j[2]
-				#dr = rl/rr
 				if (rl < rr):
 					bigR = rr
 				else:
@@ -92,12 +95,11 @@ def findSignal(circlesLed, circlesColor, rects, img):
 						if (xpr > xrmin and xpr < xrmax and ypr > yrmin and ypr < yrmax):
 							return True, True, int(h)
 					return True, False, None
-				#if ((0.5 < dr < 2) and ():
 	return False, False, None
 
-def detect(c):
+def detectRect(c):
 	peri = cv2.arcLength(c, True)
-	approx = cv2.approxPolyDP(c, 0.09 * peri, True)
+	approx = cv2.approxPolyDP(c, 0.08 * peri, True)
 	if len(approx) == 4:
 		rect = cv2.minAreaRect(approx)
 		box = np.int0(cv2.boxPoints(rect))
@@ -110,17 +112,39 @@ def detect(c):
 			return approx	
 	return None
 
+maxGlowingPeriod = 7
+minGlowingDetectPeriod = 2
+
+def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod):
+	text = colorName
+	glowingPeriodOld = glowingPeriod
+	signal, inside, hbox = findSignal(circlesLed, circlesColor, rects, frame)
+	if (signal):
+		text += " now"
+		if (inside):
+			text += " in box"
+			glowingPeriod += 1
+				
+	if (glowingPeriod == glowingPeriodOld or glowingPeriod > maxGlowingPeriod):
+		if (glowingPeriod > 0):
+			glowingPeriod -= 1
+	if (glowingPeriod >= minGlowingDetectPeriod):
+		text += ", detected state"
+	frame = cv2.putText(frame, text, (15, y), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0,200,255), 
+			thickness=2, lineType=2)
+	return hbox, glowingPeriod
+	
 
 sizeG = 7 	# size of Gauss filter kernel
-camera = cv2.VideoCapture(0)
 frame = None
-cv2.namedWindow("Frame")
 cv2.namedWindow("Mask")
+cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", mouseCoords)
+glowingpr, glowingpy, glowingpg = 0, 0, 0
 
 while True:
 	(grabbed, frame) = camera.read()
-	frame = imutils.resize(frame, width=600) # numpy.ndarray
+	frame = imutils.resize(frame, fwidth) # numpy.ndarray
 	blur = cv2.GaussianBlur(frame, (sizeG, sizeG), 0)
 
 	hsvLedOn = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
@@ -160,49 +184,33 @@ while True:
 
 	rects = []	
 	for c in cnts:
-		approx = detect(c)
+		approx = detectRect(c)
 		c = c.astype("int")
-		cv2.drawContours(frame, [c], -1, (0, 255, 0), 2)
+		cv2.drawContours(frame, [c], -1, (0, 255, 0), 1)
 		if (approx is not None):
 			rect = cv2.minAreaRect(approx)
 			box = np.int0(cv2.boxPoints(rect))
-			cv2.drawContours(frame, [box],0,(0,0,255),2)
+			cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
 			rects.append(approx)
 	 	
-	signal, inside, hboxr = findSignal(circlesLed, circlesRed, rects, frame)
-	if (signal):
-		text = "Red"
-		if (inside): text += " in box"
-		frame = cv2.putText(frame, text, (15, 40), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0,200,255), 
-			thickness=2, lineType=2)
-			
-	signal, inside, hboxy = findSignal(circlesLed, circlesYellow, rects, frame)
-	if (signal):
-		text = "Yellow"
-		if (inside): text += " in box"
-		frame = cv2.putText(frame, text, (15, 65), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0,200,255), 
-			thickness=2, lineType=2)
-			
-	signal, inside, hboxg = findSignal(circlesLed, circlesGreen, rects, frame)
-	if (signal):
-		text = "Green"
-		if (inside): text += " in box"
-		frame = cv2.putText(frame, text, (15, 90), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0,200,255), 
-			thickness=2, lineType=2)
+	hboxr, glowingpr = detectSignal(circlesLed, circlesRed, rects, frame, "Red", 30, glowingpr)
+	hboxy, glowingpy = detectSignal(circlesLed, circlesYellow, rects, frame, "Yellow", 50, glowingpy)
+	hboxg, glowingpg = detectSignal(circlesLed, circlesGreen, rects, frame, "Green", 70, glowingpg)
+	print("glowing periods: ", glowingpr, glowingpy, glowingpg)
 			
 	if (hboxg is not None): hbox = hboxg
 	elif (hboxy is not None): hbox = hboxy
 	else: hbox = hboxr
-	frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 115), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, color=(0,200,255), 
-			thickness=2, lineType=2)
+	frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 90), cv2.FONT_HERSHEY_SIMPLEX, 
+		fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
 	
-	cv2.imshow("Frame", frame)
 	#cv2.imshow("Mask", maskLedOn)
 	cv2.imshow("Mask", maskBlack)
 	#cv2.imshow("Mask", maskCanny)
 	#cv2.imshow("Mask red on", maskRedOn)
 	#cv2.imshow("Mask", maskYellowOn)
 	#cv2.imshow("Mask green on", maskGreenOn)
+	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
 	if key == ord("q"):
 		break
