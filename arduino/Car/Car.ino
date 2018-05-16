@@ -7,15 +7,7 @@ int motor = 0; //0 for neutral, -1 for left, 1 for right
 int sign = 0;
 int spd = 0;
 int num_of_digits = 0;
-
-//ADVANTAGES:
-//momental command executing
-//defended from hackers :-) (from all inpredictable strings)
-
-//DISADVANTAGES:
-//non-beautiful work with motors (if motor == 1) {...}
-//code duplication
-//difficult code
+int ms = 0; //milliseconds counter for stopping car afrer long period without commands (stop uncontrollable car)
 
 void setup() {
   Serial.begin(9600);
@@ -24,6 +16,7 @@ void setup() {
 void loop() {
   if (Serial.available()) {
     cmd = Serial.read();
+    ms = 0;
     Serial.print("char='");
     Serial.print((char)cmd);
     Serial.print("', int=");
@@ -71,5 +64,13 @@ void loop() {
       }
     }
     prev_cmd = cmd;
+  } else {
+    delay(10);
+    ms += 10;
+    if (ms == 1000) {
+      motorL.setSpeed(0);
+      motorR.setSpeed(0);
+      ms = 0;
+    }
   }
 }
