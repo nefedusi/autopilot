@@ -10,8 +10,8 @@ import cv2.cv as cv
 global frame
 
 def filterLed(hsv):
-    lowerLed = np.array([0,0,245])
-    upperLed = np.array([180,180,255])
+    lowerLed = np.array([0,0,240])
+    upperLed = np.array([180,230,255])
     return cv2.inRange(hsv, lowerLed, upperLed)
 
 def filterBlack1(hsv):
@@ -63,21 +63,21 @@ def filterGreen(hsv):
     upperGreen = np.array([80,255,255])
     return cv2.inRange(hsv, lowerGreen, upperGreen)
 
-def findAndDrawCirclesOnMask(mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
+def findAndDrawCirclesOnMask(frame, mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
 	circles = cv2.HoughCircles(mask, cv.CV_HOUGH_GRADIENT, dp=1, minDist=1, #minDist=int(fwidth*0.028),
-                            param1=10, param2=10, minRadius=0, maxRadius=int(mask.shape[1]*0.04))
+                            param1=10, param2=10, minRadius=0, maxRadius=int(mask.shape[1]*0.06))
 	if (circles is not None):
 		circles = np.uint16(np.around(circles))
-		# for j in circles[0,:]:
-			# cv2.circle(imgOriginal, (j[0],j[1]), j[2], circleColor, 2)
+		#for j in circles[0,:]:
+			#cv2.circle(frame, (j[0],j[1]), j[2], circleColor, 2)
 	return circles
 
-def findCircles(blur, filterColor, color): #color is a tuple with 3 elements in BGR
+def findCircles(frame, blur, filterColor, color): #color is a tuple with 3 elements in BGR
 	hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
 	mask = filterColor(hsv)
 	mask = cv2.dilate(mask, None, iterations=2)
 	mask = cv2.erode(mask, None, iterations=1)
-	circles = findAndDrawCirclesOnMask(mask, color)
+	circles = findAndDrawCirclesOnMask(frame, mask, color)
 	return mask, circles
 
 def mouseCoords(event,x,y,flags,param):
@@ -106,7 +106,7 @@ def findSignal(circlesLed, circlesColor, rects, img):
 				dx = i[0] - j[0]
 				dy = i[1] - j[1]
 				if (math.sqrt(dx*dx + dy*dy) < 0.7 * bigR):
-					for r in rects:
+					"""for r in rects:
 						rect = cv2.minAreaRect(r)
 						box = np.int0(cv2.boxPoints(rect))
 						w, h = rect[1][0], rect[1][1]
@@ -122,7 +122,7 @@ def findSignal(circlesLed, circlesColor, rects, img):
 						xp, yp = i[0], i[1]
 						xpr, ypr = rotateCoords(xp, yp, teta)
 						if (xpr > xrmin and xpr < xrmax and ypr > yrmin and ypr < yrmax):
-							return True, True, int(h)
+							return True, True, int(h)"""
 					return True, False, None
 	return False, False, None
 
@@ -131,7 +131,6 @@ def detectRect(c):
 	approx = cv2.approxPolyDP(c, 0.08 * peri, True)
 	if len(approx) == 4:
 		rect = cv2.minAreaRect(approx)
-		box = np.int0(cv2.boxPoints(rect))
 		w = rect[1][0]
 		h = rect[1][1]
 		if (h<w): h, w = w, h
@@ -141,7 +140,8 @@ def detectRect(c):
 			return approx	
 	return None
 
-def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod, maxGlowingPeriod=7, minGlowingDetectPeriod=2):
+def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod, 
+	minGlowingDetectPeriod, maxGlowingPeriod=6):
 	text = colorName
 	glowingPeriodOld = glowingPeriod
 	signal, inside, hbox = findSignal(circlesLed, circlesColor, rects, frame)
@@ -164,16 +164,17 @@ def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPe
 		text += ", detected state"
 	#frame = cv2.putText(frame, text, (15, y), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0,200,255), 
 	#		thickness=2, lineType=2)
+	#print text
 	return hbox, glowingPeriod
 	
-def driveIsAllowed(frame, boxHeightThreshold):
-	glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg = 0, 0, 0, 0, 0
+def driveIsAllowed(frame, boxHeightThreshold, glowTime):
+	glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg = glowTime[:5]
+	#print "cycle begin: ", glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg
 	sizeG = 7 	# size of Gauss filter kernel
-	minGlowingDetectPeriod = 2
+	minGlowingDetectPeriod = 1
 	blur = cv2.GaussianBlur(frame, (sizeG, sizeG), 0)
 
-	maskLed, circlesLed = findCircles(blur, filterLed, (155, 0, 0))
-
+	
 	hsvBlack1 = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
 	maskBlack1 = filterBlack1(hsvBlack1)
 	maskBlack1 = cv2.dilate(maskBlack1, None, iterations=2)
@@ -184,47 +185,55 @@ def driveIsAllowed(frame, boxHeightThreshold):
 	maskBlack2 = cv2.dilate(maskBlack2, None, iterations=2)
 	maskBlack2 = cv2.erode(maskBlack2, None, iterations=1)
 	
-	maskRed1, circlesRed1 = findCircles(blur, filterRed1, (0, 0, 200))
-	maskRed2, circlesRed2 = findCircles(blur, filterRed2, (0, 0, 150))
-	maskRed3, circlesRed3 = findCircles(blur, filterRed3, (0, 0, 100))
-	maskYellow, circlesYellow = findCircles(blur, filterYellow, (0, 150, 150))
-	maskGreen, circlesGreen = findCircles(blur, filterGreen, (0, 200, 0))
+	maskRed1, circlesRed1 = findCircles(frame, blur, filterRed1, (0, 0, 200))
+	maskRed2, circlesRed2 = findCircles(frame, blur, filterRed2, (0, 0, 150))
+	maskRed3, circlesRed3 = findCircles(frame, blur, filterRed3, (0, 0, 100))
+	maskYellow, circlesYellow = findCircles(frame, blur, filterYellow, (0, 150, 150))
+	maskGreen, circlesGreen = findCircles(frame, blur, filterGreen, (0, 200, 0))
+	maskLed, circlesLed = findCircles(frame, blur, filterLed, (155, 0, 0))
 
-	cnts = cv2.findContours(maskBlack1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	rects = []	
+	"""cnts = cv2.findContours(maskBlack1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	cnts = cnts[0] if imutils.is_cv2() else cnts[1]
 	cnts2 = cv2.findContours(maskBlack2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	cnts2 = cnts2[0] if imutils.is_cv2() else cnts2[1]
 	cnts += cnts2
 
-	rects = []	
+	
 	for c in cnts:
 		approx = detectRect(c)
 		c = c.astype("int")
 		#cv2.drawContours(frame, [c], -1, (0, 255, 0), 1)
 		if (approx is not None):
 			rect = cv2.minAreaRect(approx)
-			box = np.int0(cv2.boxPoints(rect))
-			cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
-			rects.append(approx)
+			#box = np.int0(cv2.boxPoints(rect))
+			#cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
+			rects.append(approx)"""
 	 	
-	hboxr1, glowingpr1 = detectSignal(circlesLed, circlesRed1, rects, frame, "Red1", 30, glowingpr1)
-	hboxr2, glowingpr2 = detectSignal(circlesLed, circlesRed2, rects, frame, "Red2", 50, glowingpr2)
-	hboxr3, glowingpr3 = detectSignal(circlesLed, circlesRed3, rects, frame, "Red3", 70, glowingpr3)
+	hboxr1, glowingpr1 = detectSignal(circlesLed, circlesRed1, rects, frame, "Red1", 30, glowingpr1, 
+		minGlowingDetectPeriod)
+	hboxr2, glowingpr2 = detectSignal(circlesLed, circlesRed2, rects, frame, "Red2", 50, glowingpr2, 
+		minGlowingDetectPeriod)
+	hboxr3, glowingpr3 = detectSignal(circlesLed, circlesRed3, rects, frame, "Red3", 70, glowingpr3, 
+		minGlowingDetectPeriod)
 	glowingpr = max((glowingpr1, glowingpr2, glowingpr3))
-	hboxy, glowingpy = detectSignal(circlesLed, circlesYellow, rects, frame, "Yellow", 90, glowingpy)
-	hboxg, glowingpg = detectSignal(circlesLed, circlesGreen, rects, frame, "Green", 110, glowingpg)
-	#print("glowing periods: ", glowingpr1, glowingpr2, glowingpr3, glowingpr, glowingpy, glowingpg)
+	hboxy, glowingpy = detectSignal(circlesLed, circlesYellow, rects, frame, "Yellow", 90, glowingpy, 
+		minGlowingDetectPeriod)
+	hboxg, glowingpg = detectSignal(circlesLed, circlesGreen, rects, frame, "Green", 110, glowingpg, 
+		minGlowingDetectPeriod)
+	print "glowing periods red: ", glowingpr1, glowingpr2, glowingpr3
+	print "glowing periods: ", glowingpr, glowingpy, glowingpg
 			
-	if (hboxg is not None): hbox = hboxg
+	"""if (hboxg is not None): hbox = hboxg
 	elif (hboxy is not None): hbox = hboxy
 	elif (hboxr1 is not None): hbox = hboxr1
 	elif (hboxr2 is not None): hbox = hboxr2
 	else: hbox = hboxr3
-	# print("box height =", hbox)
+	print "box height =", hbox
 	#frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 
-	#	fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
+	#	fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)"""
 		
-	#cv2.imshow("Mask", maskLedOn)
+	#cv2.imshow("led", maskLed)
 	#cv2.imshow("Maskb1", maskBlack1)
 	#cv2.imshow("Maskb2", maskBlack2)
 	#cv2.imshow("Maskro1", maskRed1)
@@ -233,7 +242,9 @@ def driveIsAllowed(frame, boxHeightThreshold):
 	#cv2.imshow("Mask", maskYellowOn)
 	#cv2.imshow("Mask green on", maskGreenOn)	
 	
-	if (glowingpr >= minGlowingDetectPeriod and hbox > boxHeightThreshold):
+	#if (glowingpr >= minGlowingDetectPeriod and hbox > boxHeightThreshold):
+	glowTime[:5] = glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg
+	if (glowingpr >= minGlowingDetectPeriod):
 		return False
 	return True
 

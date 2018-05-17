@@ -46,6 +46,7 @@ min_speed = 140
 fcount = 0
 log_file = open("log.txt", "w")
 ftime = time.time()
+glowTime = [0, 0, 0, 0, 0]
 while True:
     start = time.time()
     grabbed, frame = capture.read()
@@ -61,10 +62,11 @@ while True:
     # average_point =
     # print average_point, average_point_center
     frame_4 = cv2.resize(frame, (sh[1]/4, sh[0]/4))
+    frame = cv2.resize(frame, (sh[1]/3, sh[0]/3))
     #cv2.imshow("Autopilot", frame)
 
     weightened_image, angle = road.find_road_and_get_angle(frame_4)
-    drive = driveIsAllowed(frame, sh[1]*0.25)
+    drive = driveIsAllowed(frame, sh[1]*0.25, glowTime)
     if angle is None:
         #if fcount > 1:
         l_speed = 0
@@ -82,7 +84,7 @@ while True:
     if drive:
         if ftime_now - ftime < 0.4:
             sendSignal(l_speed, r_speed)
-        elif ftime_now - ftime < 0.6:
+        elif ftime_now - ftime < 1:
             sendSignal(0, 0)
         else:
             ftime = time.time()
@@ -93,7 +95,7 @@ while True:
         sendSignal(0, 0)
     # cv2.imwrite(sys.argv[1].split(".")[0] + "mod.jpg", weightened_image)
 # while True:
-    #cv2.imshow("Autopilot", weightened_image)
+    cv2.imshow("Autopilot", frame)
     cv2.waitKey(10)
     end = time.time()
    # print end - start
