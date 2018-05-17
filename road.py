@@ -52,7 +52,7 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
 
 def find_road_and_get_angle(frame):
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    mask_black = cv2.inRange(gray_frame, (0, 0, 0), (255, 255, 140))
+    mask_black = cv2.inRange(gray_frame, (0, 0, 0), (255, 255, 120))
     # return mask_black
     kernel_size = 5
     gauss_black = mask_black
@@ -66,10 +66,10 @@ def find_road_and_get_angle(frame):
     # print top_left, top_right
     vertices = [np.array([lower_left,top_left,top_right,lower_right], dtype=np.int32)]
 
-    gauss_black = cv2.dilate(gauss_black, None, iterations = 3)
-    gauss_black = cv2.erode(gauss_black, None, iterations = 3)
+    gauss_black = cv2.dilate(gauss_black, None, iterations = 7)
+    gauss_black = cv2.erode(gauss_black, None, iterations = 7)
     gauss_black_roi = region_of_interest(gauss_black, vertices)
-    # return gauss_black_roi, None
+    #return gauss_black_roi, None
     # gauss_black_roi = cv2.bitwise_not(gauss_black_roi)
     indices = np.transpose(np.nonzero(gauss_black_roi))
     # print indices
@@ -121,7 +121,7 @@ def find_road_and_get_angle(frame):
     average_line[3] += average_point_dir[1]
     average_line_dir = [average_line[2] - average_line[0], average_line[3] - average_line[1]]
     mass_center_dir = [imshape[1]/2 - mass_center[0], imshape[0] - mass_center[1]]
-    print mass_center_dir, average_line_dir
+    #print mass_center_dir, average_line_dir
     average_vector = [average_line_dir[0] + mass_center_dir[0]/2, average_line_dir[1] + mass_center_dir[1]/2]
     print "Vect", average_vector
     # average_vector = [average_point_dir[0] + average_line_dir[0], average_point_dir[1] + average_line_dir[1]]
@@ -129,7 +129,7 @@ def find_road_and_get_angle(frame):
         return frame, 0
     angle = math.atan(average_vector[0]/float(average_vector[1]))
     # print average_vector, angle
-    angle = angle/(math.pi/3)
+    angle = angle/(math.pi/2)
     # print "point", average_point_center
     cv2.line(line_image, (average_line[0], average_line[1]), (average_line[2], average_line[3]), color = (255, 255, 255), thickness = 4)
     # cv2.line(line_image, (imshape[1]/2, imshape[0]), (mass_center_dir[0], mass_center_dir[1]), color = (255, 255, 255), thickness = 4)

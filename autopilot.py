@@ -10,6 +10,8 @@ import time
 # frame = cv2.imread(sys.argv[1])
 capture = cv2.VideoCapture(0)
 ser = serial.Serial('/dev/ttyAMA0', 9600, timeout=0)
+com_queue = []
+
 def getCommand(engine, speed):
     command = engine
     if speed >= 0:
@@ -26,11 +28,20 @@ def getCommand(engine, speed):
 
 def sendSignal(l_speed, r_speed):
     command = getCommand('R', -int(l_speed))
+    #ser.write(command)
+    #print command
     command += getCommand('L', -int(r_speed))
-    ser.write(command)
+    com_queue.append(command)
+    print com_queue
+    if len(com_queue) > 0:
+	command = com_queue.pop(0)
+        ser.write(command)
+    print command
 
-speed = 90
-rotate = 60
+
+max_speed = 150
+min_speed = 120
+#rotate = 60
 fcount = 0
 log_file = open("log.txt", "w")
 while True:
@@ -52,25 +63,31 @@ while True:
    # cv2.waitKey(1)
    # continue   
     weightened_image, angle = road.find_road_and_get_angle(frame)
-    if angle is None or abs(angle) > math.pi/2:
+    if angle is None:
         #if fcount > 1:
         l_speed = 0
         r_speed = 0
-        fcount += 1
     else:
-        fcount = 0
+        speed = max_speed - (max_speed - min_speed)*abs(angle)
+        rotate = 2*speed/3
         l_speed = speed - rotate*angle
         r_speed = speed + rotate*angle
+    print angle
     print l_speed, r_speed
     log_file.write(str(l_speed) + " " + str(r_speed) + "\n")
     # angle =
-    sendSignal(l_speed, r_speed)
+    if fcount < 2:
+        sendSignal(l_speed, r_speed)
+    elif fcount < 4:
+        sendSignal(0, 0)
+        fcount = 0
+    fcount += 1
     # sendSignal('R', r_speed)
     if weightened_image is None:
         weightened_image = frame
     # cv2.imwrite(sys.argv[1].split(".")[0] + "mod.jpg", weightened_image)
 # while True:
-    cv2.imshow("Autopilot", weightened_image)
+   # cv2.imshow("Autopilot", weightened_image)
     cv2.waitKey(10)
     end = time.time()
-    print end - start
+   # print end - start
