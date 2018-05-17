@@ -140,10 +140,7 @@ def detectRect(c):
 			return approx	
 	return None
 
-maxGlowingPeriod = 7
-minGlowingDetectPeriod = 2
-
-def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod):
+def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPeriod, maxGlowingPeriod=7, minGlowingDetectPeriod=2):
 	text = colorName
 	glowingPeriodOld = glowingPeriod
 	signal, inside, hbox = findSignal(circlesLed, circlesColor, rects, frame)
@@ -164,27 +161,16 @@ def detectSignal(circlesLed, circlesColor, rects, frame, colorName, y, glowingPe
 				
 	if (glowingPeriod >= minGlowingDetectPeriod):
 		text += ", detected state"
-	frame = cv2.putText(frame, text, (15, y), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0,200,255), 
-			thickness=2, lineType=2)
+	#frame = cv2.putText(frame, text, (15, y), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0,200,255), 
+	#		thickness=2, lineType=2)
 	return hbox, glowingPeriod
 	
-
-sizeG = 7 	# size of Gauss filter kernel
-frame = None
-cv2.namedWindow("Maskb1")
-cv2.namedWindow("Maskb2")
-#cv2.namedWindow("Maskro1")
-#cv2.namedWindow("Maskro2")
-#cv2.namedWindow("Maskro3")
-cv2.namedWindow("Frame")
-cv2.setMouseCallback("Frame", mouseCoords)
-glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg = 0, 0, 0, 0, 0
-
-while True:
-	(grabbed, frame) = camera.read()
-	frame = imutils.resize(frame, fwidth) # numpy.ndarray
+def driveIsAllowed(frame, boxHeightThreshold):
+	glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg = 0, 0, 0, 0, 0
+	sizeG = 7 	# size of Gauss filter kernel
+	minGlowingDetectPeriod = 2
 	blur = cv2.GaussianBlur(frame, (sizeG, sizeG), 0)
-	
+
 	maskLed, circlesLed = findCircles(blur, filterLed, (155, 0, 0))
 
 	hsvBlack1 = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
@@ -203,7 +189,6 @@ while True:
 	maskYellow, circlesYellow = findCircles(blur, filterYellow, (0, 150, 150))
 	maskGreen, circlesGreen = findCircles(blur, filterGreen, (0, 200, 0))
 
-	lowThreshold = 25
 	cnts = cv2.findContours(maskBlack1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	cnts = cnts[0] if imutils.is_cv2() else cnts[1]
 	cnts2 = cv2.findContours(maskBlack2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -224,26 +209,51 @@ while True:
 	hboxr1, glowingpr1 = detectSignal(circlesLed, circlesRed1, rects, frame, "Red1", 30, glowingpr1)
 	hboxr2, glowingpr2 = detectSignal(circlesLed, circlesRed2, rects, frame, "Red2", 50, glowingpr2)
 	hboxr3, glowingpr3 = detectSignal(circlesLed, circlesRed3, rects, frame, "Red3", 70, glowingpr3)
+	glowingpr = max((glowingpr1, glowingpr2, glowingpr3))
 	hboxy, glowingpy = detectSignal(circlesLed, circlesYellow, rects, frame, "Yellow", 90, glowingpy)
 	hboxg, glowingpg = detectSignal(circlesLed, circlesGreen, rects, frame, "Green", 110, glowingpg)
-	print("glowing periods: ", glowingpr1, glowingpr2, glowingpr3, glowingpy, glowingpg)
+	#print("glowing periods: ", glowingpr1, glowingpr2, glowingpr3, glowingpr, glowingpy, glowingpg)
 			
 	if (hboxg is not None): hbox = hboxg
 	elif (hboxy is not None): hbox = hboxy
 	elif (hboxr1 is not None): hbox = hboxr1
 	elif (hboxr2 is not None): hbox = hboxr2
 	else: hbox = hboxr3
-	frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 130), cv2.FONT_HERSHEY_SIMPLEX, 
-		fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
-	
+	print("box height =", hbox)
+	#frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 
+	#	fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
+		
 	#cv2.imshow("Mask", maskLedOn)
-	cv2.imshow("Maskb1", maskBlack1)
-	cv2.imshow("Maskb2", maskBlack2)
+	#cv2.imshow("Maskb1", maskBlack1)
+	#cv2.imshow("Maskb2", maskBlack2)
 	#cv2.imshow("Maskro1", maskRed1)
 	#cv2.imshow("Maskro2", maskRed2)
 	#cv2.imshow("Maskro3", maskRed3)
 	#cv2.imshow("Mask", maskYellowOn)
-	#cv2.imshow("Mask green on", maskGreenOn)
+	#cv2.imshow("Mask green on", maskGreenOn)	
+	
+	if (glowingpr >= minGlowingDetectPeriod and hbox > boxHeightThreshold):
+		return False
+	return True
+
+
+
+frame = None
+#cv2.namedWindow("Maskb1")
+#cv2.namedWindow("Maskb2")
+#cv2.namedWindow("Maskro1")
+#cv2.namedWindow("Maskro2")
+#cv2.namedWindow("Maskro3")
+cv2.namedWindow("Frame")
+cv2.setMouseCallback("Frame", mouseCoords)
+
+
+while True:
+	(grabbed, frame) = camera.read()
+	frame = imutils.resize(frame, fwidth) # numpy.ndarray
+
+	print("driveIsAllowed =", driveIsAllowed(frame, fwidth*0.25))
+	
 	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
 	if key == ord("q"):
