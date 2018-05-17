@@ -123,7 +123,7 @@ def find_road_and_get_angle(frame):
     mass_center_dir = [imshape[1]/2 - mass_center[0], imshape[0] - mass_center[1]]
     #print mass_center_dir, average_line_dir
     average_vector = [average_line_dir[0] + mass_center_dir[0]/2, average_line_dir[1] + mass_center_dir[1]/2]
-    print "Vect", average_vector
+    # print "Vect", average_vector
     # average_vector = [average_point_dir[0] + average_line_dir[0], average_point_dir[1] + average_line_dir[1]]
     if average_vector[1] == 0:
         return frame, 0

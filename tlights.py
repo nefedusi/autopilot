@@ -3,10 +3,11 @@ import numpy as np
 import imutils
 import cv2
 import math, sys
-
-camera = cv2.VideoCapture(0)
-fwidth = int(sys.argv[1])
-print("frame width =", fwidth)
+import cv2.cv as cv
+# camera = cv2.VideoCapture(0)
+# fwidth = int(sys.argv[1])
+# print("frame width =", fwidth)
+global frame
 
 def filterLed(hsv):
     lowerLed = np.array([0,0,245])
@@ -62,13 +63,13 @@ def filterGreen(hsv):
     upperGreen = np.array([80,255,255])
     return cv2.inRange(hsv, lowerGreen, upperGreen)
 
-def findAndDrawCirclesOnMask(imgOriginal, mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
-	circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1, minDist=1, #minDist=int(fwidth*0.028),
-                            param1=10, param2=10, minRadius=0, maxRadius=int(fwidth*0.04))
+def findAndDrawCirclesOnMask(mask, circleColor=(155,0,0)):      # circleColor in BGR!!!
+	circles = cv2.HoughCircles(mask, cv.CV_HOUGH_GRADIENT, dp=1, minDist=1, #minDist=int(fwidth*0.028),
+                            param1=10, param2=10, minRadius=0, maxRadius=int(mask.shape[1]*0.04))
 	if (circles is not None):
 		circles = np.uint16(np.around(circles))
-		for j in circles[0,:]:
-			cv2.circle(imgOriginal, (j[0],j[1]), j[2], circleColor, 2)
+		# for j in circles[0,:]:
+			# cv2.circle(imgOriginal, (j[0],j[1]), j[2], circleColor, 2)
 	return circles
 
 def findCircles(blur, filterColor, color): #color is a tuple with 3 elements in BGR
@@ -76,7 +77,7 @@ def findCircles(blur, filterColor, color): #color is a tuple with 3 elements in 
 	mask = filterColor(hsv)
 	mask = cv2.dilate(mask, None, iterations=2)
 	mask = cv2.erode(mask, None, iterations=1)
-	circles = findAndDrawCirclesOnMask(frame, mask, color)
+	circles = findAndDrawCirclesOnMask(mask, color)
 	return mask, circles
 
 def mouseCoords(event,x,y,flags,param):
@@ -85,7 +86,7 @@ def mouseCoords(event,x,y,flags,param):
 			bgr = frame[y,x]
 			hsv = cv2.cvtColor(np.uint8([[bgr]]), cv2.COLOR_BGR2HSV)
 			#print("click x=", x, "y=", y)
-			print("hsv =", hsv)
+			# print("hsv =", hsv)
 
 def rotateCoords(x, y, teta): #teta angle must be in radians!
 	xr =   x * math.cos(teta) + y * math.sin(teta)
@@ -219,7 +220,7 @@ def driveIsAllowed(frame, boxHeightThreshold):
 	elif (hboxr1 is not None): hbox = hboxr1
 	elif (hboxr2 is not None): hbox = hboxr2
 	else: hbox = hboxr3
-	print("box height =", hbox)
+	# print("box height =", hbox)
 	#frame = cv2.putText(frame, "Box height = " + str(hbox), (15, 20), cv2.FONT_HERSHEY_SIMPLEX, 
 	#	fontScale=0.6, color=(0,200,255), thickness=2, lineType=2)
 		
@@ -238,27 +239,27 @@ def driveIsAllowed(frame, boxHeightThreshold):
 
 
 
-frame = None
+# frame = None
 #cv2.namedWindow("Maskb1")
 #cv2.namedWindow("Maskb2")
 #cv2.namedWindow("Maskro1")
 #cv2.namedWindow("Maskro2")
 #cv2.namedWindow("Maskro3")
-cv2.namedWindow("Frame")
-cv2.setMouseCallback("Frame", mouseCoords)
+# cv2.namedWindow("Frame")
+# cv2.setMouseCallback("Frame", mouseCoords)
 
 
-while True:
-	(grabbed, frame) = camera.read()
-	frame = imutils.resize(frame, fwidth) # numpy.ndarray
+# while True:
+# 	(grabbed, frame) = camera.read()
+# 	frame = imutils.resize(frame, fwidth) # numpy.ndarray
 
-	print("driveIsAllowed =", driveIsAllowed(frame, fwidth*0.25))
+# 	print("driveIsAllowed =", driveIsAllowed(frame, fwidth*0.25))
 	
-	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(1) & 0xFF
-	if key == ord("q"):
-		break
+# 	cv2.imshow("Frame", frame)
+# 	key = cv2.waitKey(1) & 0xFF
+# 	if key == ord("q"):
+# 		break
 	
-# cleanup the camera and close any open windows
-camera.release()
-cv2.destroyAllWindows()
+# # cleanup the camera and close any open windows
+# camera.release()
+# cv2.destroyAllWindows()

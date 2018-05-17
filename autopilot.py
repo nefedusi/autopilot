@@ -6,6 +6,7 @@ import serial
 import road
 import cv2
 import time
+from tlights import driveIsAllowed
 # print sys.argv[1]
 # frame = cv2.imread(sys.argv[1])
 capture = cv2.VideoCapture(0)
@@ -59,10 +60,11 @@ while True:
     sh = frame.shape
     # average_point =
     # print average_point, average_point_center
-    frame = cv2.resize(frame, (sh[1]/4, sh[0]/4))
+    frame_4 = cv2.resize(frame, (sh[1]/4, sh[0]/4))
     #cv2.imshow("Autopilot", frame)
 
-    weightened_image, angle = road.find_road_and_get_angle(frame)
+    weightened_image, angle = road.find_road_and_get_angle(frame_4)
+    drive = driveIsAllowed(frame, sh[1]*0.25)
     if angle is None:
         #if fcount > 1:
         l_speed = 0
@@ -72,20 +74,23 @@ while True:
         rotate = 3*speed/4
         l_speed = speed - rotate*angle
         r_speed = speed + rotate*angle
-    print angle
     print l_speed, r_speed
     log_file.write(str(l_speed) + " " + str(r_speed) + "\n")
 
     ftime_now = time.time()
-    if ftime_now - ftime < 0.4:
-        sendSignal(l_speed, r_speed)
-    elif ftime_now - ftime < 0.6:
-        sendSignal(0, 0)
+    print "drive", drive
+    if drive:
+        if ftime_now - ftime < 0.4:
+            sendSignal(l_speed, r_speed)
+        elif ftime_now - ftime < 0.6:
+            sendSignal(0, 0)
+        else:
+            ftime = time.time()
+            sendSignal(0, 0)
+        if weightened_image is None:
+            weightened_image = frame
     else:
-        ftime = time.time()
         sendSignal(0, 0)
-    if weightened_image is None:
-        weightened_image = frame
     # cv2.imwrite(sys.argv[1].split(".")[0] + "mod.jpg", weightened_image)
 # while True:
     #cv2.imshow("Autopilot", weightened_image)
