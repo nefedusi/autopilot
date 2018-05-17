@@ -40,10 +40,11 @@ def sendSignal(l_speed, r_speed):
 
 
 max_speed = 150
-min_speed = 120
+min_speed = 140
 #rotate = 60
 fcount = 0
 log_file = open("log.txt", "w")
+ftime = time.time()
 while True:
     start = time.time()
     grabbed, frame = capture.read()
@@ -60,8 +61,7 @@ while True:
     # print average_point, average_point_center
     frame = cv2.resize(frame, (sh[1]/4, sh[0]/4))
     #cv2.imshow("Autopilot", frame)
-   # cv2.waitKey(1)
-   # continue   
+
     weightened_image, angle = road.find_road_and_get_angle(frame)
     if angle is None:
         #if fcount > 1:
@@ -69,25 +69,26 @@ while True:
         r_speed = 0
     else:
         speed = max_speed - (max_speed - min_speed)*abs(angle)
-        rotate = 2*speed/3
+        rotate = 3*speed/4
         l_speed = speed - rotate*angle
         r_speed = speed + rotate*angle
     print angle
     print l_speed, r_speed
     log_file.write(str(l_speed) + " " + str(r_speed) + "\n")
-    # angle =
-    if fcount < 2:
+
+    ftime_now = time.time()
+    if ftime_now - ftime < 0.4:
         sendSignal(l_speed, r_speed)
-    elif fcount < 4:
+    elif ftime_now - ftime < 0.6:
         sendSignal(0, 0)
-        fcount = 0
-    fcount += 1
-    # sendSignal('R', r_speed)
+    else:
+        ftime = time.time()
+        sendSignal(0, 0)
     if weightened_image is None:
         weightened_image = frame
     # cv2.imwrite(sys.argv[1].split(".")[0] + "mod.jpg", weightened_image)
 # while True:
-   # cv2.imshow("Autopilot", weightened_image)
+    #cv2.imshow("Autopilot", weightened_image)
     cv2.waitKey(10)
     end = time.time()
    # print end - start
