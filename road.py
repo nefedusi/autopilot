@@ -16,10 +16,12 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
-def draw_lines(img, lines, color=[255, 0, 0], thickness=4):
+def draw_lines(img, lines, color=[255, 0, 0], thickness=4, dir=False):
     for line in lines:
         for x1, y1, x2, y2 in line:
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+            if dir is True:
+                cv2.circle(img, (x2, y2), 2, color=[0, 0, 255], thickness = 2)
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
@@ -36,16 +38,32 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     max_dist = (x_max - x_min)/4
     left_lines = []
     right_lines = []
-
-    lines = lines[0]
+    iw = img.shape[1]/2
+    # lines = lines.reshape((lines.shape[0], lines.shape[2]))
+    # lines = lines[0]
     for line in lines:
         # print "HEY", line[0]
-        if line[1] > line[3]:
-            p1 = (line[0], line[1])
-            line[0] = line[2]
-            line[1] = line[3]
-            line[2] = p1[0]
-            line[3] = p1[1]
+        if abs(line[1] - line[3]) > abs(line[2] - line[0]):
+            if line[1] > line[3]:
+                p1 = (line[0], line[1])
+                line[0] = line[2]
+                line[1] = line[3]
+                line[2] = p1[0]
+                line[3] = p1[1]
+        else:
+            if (line[0] < iw or line[2] < iw) and line[2] > line[0]:
+                p1 = (line[0], line[1])
+                line[0] = line[2]
+                line[1] = line[3]
+                line[2] = p1[0]
+                line[3] = p1[1]
+            elif (line[0] > iw or line[2] > iw) and line[0] > line[2]:
+                p1 = (line[0], line[1])
+                line[0] = line[2]
+                line[1] = line[3]
+                line[2] = p1[0]
+                line[3] = p1[1]
+
     draw_lines(line_img, [lines])
     return line_img, lines
 
@@ -60,8 +78,8 @@ def find_road_and_get_angle(frame):
     imshape = gauss_black.shape
     lower_left = [0, imshape[0]]
     lower_right = [imshape[1], imshape[0]]
-    top_left = [imshape[1]/2 - imshape[1]/2, imshape[0]/2 + 0]
-    top_right = [imshape[1]/2 + imshape[1]/2, imshape[0]/2 + 0]
+    top_left = [imshape[1]/2 - imshape[1]/4, imshape[0]/2 + imshape[0]/15]
+    top_right = [imshape[1]/2 + imshape[1]/4, imshape[0]/2 + imshape[0]/15]
     # print lower_left, lower_right
     # print top_left, top_right
     vertices = [np.array([lower_left,top_left,top_right,lower_right], dtype=np.int32)]
@@ -69,7 +87,6 @@ def find_road_and_get_angle(frame):
     gauss_black = cv2.dilate(gauss_black, None, iterations = 7)
     gauss_black = cv2.erode(gauss_black, None, iterations = 7)
     gauss_black_roi = region_of_interest(gauss_black, vertices)
-    #return gauss_black_roi, None
     # gauss_black_roi = cv2.bitwise_not(gauss_black_roi)
     indices = np.transpose(np.nonzero(gauss_black_roi))
     # print indices
@@ -81,6 +98,7 @@ def find_road_and_get_angle(frame):
     #return gauss_black, None
     canny_edges = cv2.Canny(gauss_black, low_threshold, high_threshold)
     roi_image = region_of_interest(canny_edges, vertices)
+    # return roi_image, None, None
     #return roi_image, None
     # return roi_image
     rho = 1
@@ -88,11 +106,16 @@ def find_road_and_get_angle(frame):
     threshold = 10
     min_line_len = 30/4
     max_line_gap = 10
+    #rho = 1
+    #theta = np.pi/180
+    #threshold = 10
+    #min_line_len = 4
+    #max_line_gap = 5
 
     line_image, lines = hough_lines(roi_image, rho, theta, threshold, min_line_len, max_line_gap)
-   # print "lines", lines
+    print "lines", lines.shape
     if lines is None:
-        return None, None
+        return None, None, lines
     # print type(lines)
     #lines = lines[0]
     line_lengths = [math.sqrt((line[2] - line[0])*(line[2] - line[0]) + (line[3] - line[1])*(line[3] - line[1])) for line in lines]
@@ -136,4 +159,88 @@ def find_road_and_get_angle(frame):
     
     # cv2.line(line_image, tuple(average_point), tuple(average_point_center), color = (255, 255, 255), thickness = 4)
     weightened_image = cv2.addWeighted(frame, 0.8, line_image, 1., 0)
-    return weightened_image, angle
+    return weightened_image, angle, lines
+
+
+def getDistancePoints(p1, p2):
+    return math.sqrt((p2[0] - p1[0])*(p2[0] - p1[0]) + (p2[1] - p1[1])*(p2[1] - p1[1]))
+
+
+def getDistanceLines(line1, line2):
+    p11 = (line1[0], line1[1])
+    p12 = (line1[2], line1[3])
+    p21 = (line2[0], line2[1])
+    p22 = (line2[2], line2[3])
+    d1 = getDistancePoints(p11, p21)
+    d2 = getDistancePoints(p11, p22)
+    d3 = getDistancePoints(p12, p21)
+    d4 = getDistancePoints(p12, p22)
+    return min((d1, d2, d3, d4))
+
+
+def swapVector(v):
+    v = v[2], v[3], v[0], v[1]
+    return v
+
+
+def findCrossings(frame, lines):
+    print("fincCrossing", lines)
+    clusters = []
+    lines = list(lines)
+    while len(lines) > 0:
+        line = lines.pop()
+        if len(clusters) == 0:
+            clusters.append([line])
+        lcluster = None
+        for cluster in clusters:
+            for cline in cluster:
+                dist = getDistanceLines(line, cline)
+                if dist < 20:
+                    lcluster = cluster
+                    break
+            if lcluster is not None:
+                break
+        if lcluster is not None:
+            lcluster.append(line)
+        else:
+            clusters.append([line])
+    cluster_averages = [np.average(cluster, axis = 0).astype(int) for cluster in clusters]
+    average = np.average(cluster_averages, axis = 0)
+    average = ((average[0] + average[2])/2, (average[1] + average[3])/2)
+    print("Total average", average)
+    print(cluster_averages)
+    draw_lines(frame, [cluster_averages], color=[0, 0, 255], dir = True)
+    directions = []
+    for i in range(len(cluster_averages) - 1):
+        avg1 = cluster_averages[i]
+        dir1 =  (avg1[2] - avg1[0], avg1[3] - avg1[1]) 
+        for j in range(i + 1, len(cluster_averages)):
+            avg2 = cluster_averages[j]
+            avg_avg = (int((avg1[0] + avg2[0])/2), int((avg1[1] + avg2[1])/2), int((avg1[2] + avg2[2])/2), int((avg1[3] + avg2[3])/2))
+            avg1s, avg2s = avg1, avg2
+            if avg_avg[1] + 10 < average[1] and avg_avg[3] > avg_avg[1]:
+                avg1s = swapVector(avg1)
+                avg2s = swapVector(avg2)
+                avg_avg = swapVector(avg_avg)
+
+            dir1 =  (avg1s[2] - avg1s[0], avg1s[3] - avg1s[1]) 
+            dir2 =  (avg2s[2] - avg2s[0], avg2s[3] - avg2s[1])
+            dir_avg = (avg_avg[2] - avg_avg[0], avg_avg[3] - avg_avg[1])
+            ang1 = math.atan(dir1[1]/float(dir1[0]))
+            ang2 = math.atan(dir2[1]/float(dir2[0]))
+            ang_avg = math.atan(dir_avg[1]/float(dir_avg[0]))
+
+            # cv2.circle(frame, (avg_avg[2], avg_avg[3]), 2, color=[0, 0, 255], thickness = 2)
+            print(dir_avg, dir1, dir2)
+            print(ang_avg, ang1, ang2)
+            if abs(ang_avg - ang1) < math.pi/4 and abs(ang_avg - ang2) < math.pi/4 and (ang2 - ang1) < math.pi/4:
+                # print "WTF", avg_avg
+                # avg_avg = swapVector(avg_avg)
+                draw_lines(frame, [[avg_avg]], color=[0, 255, 255], dir = True)
+                # print "WTF", avg_avg
+                directions.append(avg_avg)
+            else:
+                print(abs(ang_avg - ang1), abs(ang_avg - ang2))
+    print("Directions", directions)
+    # for avg in cluster_a/verages:
+        # cv2.line()

@@ -65,7 +65,8 @@ while True:
     frame = cv2.resize(frame, (sh[1]/3, sh[0]/3))
     #cv2.imshow("Autopilot", frame)
 
-    weightened_image, angle = road.find_road_and_get_angle(frame_4)
+    weightened_image, angle, lines = road.find_road_and_get_angle(frame_4)
+    road.findCrossings(frame, lines)
     drive = driveIsAllowed(frame, sh[1]*0.25, glowTime)
     if angle is None:
         #if fcount > 1:
